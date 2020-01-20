@@ -1,18 +1,18 @@
 from __future__ import unicode_literals
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QLabel, QGridLayout, QMessageBox \
-    , QRadioButton, QCheckBox
-import logging
-
+    , QRadioButton, QCheckBox, QLineEdit
 from PyQt5 import QtCore
 
-logger = logging.getLogger(__name__)
+from logging import getLogger
+
+logger = getLogger(__name__)
 
 qa_list = {
     "Wybierz typ sieci": [
         "Sieć bezprzewodowa",
         "Sieć przewodowa"
     ],
-    "Wybierz fizyczną topologię sieci": [   # pytania gdy sieć przewodowa
+    "Wybierz fizyczną topologię sieci": [  # pytania gdy sieć przewodowa
         "Topologia magistrali",
         "Topologia liniowa",
         "Topologia pierścienia",
@@ -29,12 +29,12 @@ qa_list = {
         "Skrętka hybrydowa"
     ],
     "Wybierz ilość okablowania RJ45": [
-
+        "amount"
     ],
-    "Wybierz długość wybranego uprzednio ukablowania": [
-
+    "Wybierz długość wybranego uprzednio okablowania": [
+        "length"
     ],
-    "Wybierz topologię sieci bezprzewodowej": [     # pytania gdy sieć bezprzewodowa
+    "Wybierz topologię sieci bezprzewodowej": [  # pytania gdy sieć bezprzewodowa
         "Topologia gwiazdy",
         "Topologia kraty"
     ],
@@ -51,7 +51,8 @@ qa_list = {
         "Przydział statyczny"
     ],
     "Wybierz rodzaj routerów": [
-
+        "Router wielowarstwowy (switch)",
+        "Router jednowarstwowy (standardowy)"
     ],
     "Wybierz typy serwerów jakie będą podłączone do sieci oraz ich liczbę": [
         "Serwer plików",
@@ -61,18 +62,24 @@ qa_list = {
         "Serwer DNS"
     ],
     "Czy konsola do zarządzania serwerami": [
-
+        "Tak",
+        "Nie"
     ],
     "Wybierz system operacyjny obsługujący serwery": [
-
+        "Fedora",
+        "Ubuntu Server",
+        "Arch Linux",
+        "Windows Server",
+        "RedHat Linux",
+        "Solaris"
     ],
     "Podaj liczbę urządzeń biurowych, które będą podłączone do sieci": [
-
+        "amount"
     ]
     # TODO think of another questions
 }
 
-list_of_answers = []
+list_of_answers = {}
 
 
 class Application(QMainWindow):
@@ -109,6 +116,7 @@ class ProjectWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.output_win = None
         self.main_grid = QGridLayout()
         self.wid = QWidget()
         self.answers_wid = QWidget()
@@ -118,8 +126,11 @@ class ProjectWindow(QMainWindow):
         self.question_label = QLabel(self.question)
         self.prev = QPushButton("Poprzednie pytanie")
         self.next = QPushButton("Następne pytanie")
+        self.generate = QPushButton("Generuj projekt")
         self.next.clicked.connect(self.show_next_question)
+        self.nect.clicked.connect(self.handle_qa())
         self.prev.clicked.connect(self.show_next_question)
+        self.generate.clicked.connect(self.show_project)
         self.initialize()
 
     def closeEvent(self, event):
@@ -128,12 +139,11 @@ class ProjectWindow(QMainWindow):
                                       "Czy na pewno chcesz wyjść z trybu projektowania ?",
                                       QMessageBox.Yes | QMessageBox.No)
         event.ignore()
-
         if result == QMessageBox.Yes:
             event.accept()
 
-    def initialize(self):
-        self.resize(500, 300)
+    def initialize(self):  # window initialization with first question
+        self.resize(400, 200)
         self.setWindowTitle("Projekt sieci")
         self.setCentralWidget(self.wid)
         radio_1 = QRadioButton("Topologia magistrali")
@@ -148,8 +158,10 @@ class ProjectWindow(QMainWindow):
         self.main_grid.addWidget(self.question_label, 0, 0, 2, 0)
         self.main_grid.addWidget(self.answers_wid, 1, 0, 2, 0)
         self.main_grid.addWidget(self.prev, 2, 0)
-        self.prev.setVisible(False)
         self.main_grid.addWidget(self.next, 2, 2)
+        self.main_grid.addWidget(self.generate, 2, 2)
+        self.prev.setVisible(False)
+        self.generate.setVisible(False)
         self.wid.setLayout(self.main_grid)
         self.show()
 
@@ -168,9 +180,12 @@ class ProjectWindow(QMainWindow):
             self.question = list(qa_list.keys())[self.question_index]
             if self.question_index + 1 >= len(list(qa_list.keys())):
                 self.next.setVisible(False)
+                self.generate.setVisible(True)
+
         if sender.text() == "Poprzednie pytanie":
             self.question_index -= 1
             self.question = list(qa_list.keys())[self.question_index]
+            self.generate.setVisible(False)
             if self.question_index - 1 < 0:
                 self.prev.setVisible(False)
 
@@ -194,19 +209,50 @@ class ProjectWindow(QMainWindow):
         answer_index = 0
         self.question_label.setText(self.question)  # set layout items
         for item in qa_list[str(self.question)]:
-            if self.question == "Wybierz typy serwerów jakie będą podłączone do sieci":
+            if self.question == "Wybierz typy serwerów jakie będą podłączone do sieci oraz ich liczbę":
+                qline = QLineEdit()
+                qline.setMinimumSize(20, 20)
                 checkbox = QCheckBox(item)
                 self.checkboxes.append(checkbox)
+                self.checkboxes.append(checkbox)
                 self.answers_grid.addWidget(checkbox, 0, answer_index)
+                self.answers_grid.addWidget(qline, 1, answer_index)
+                checkbox.stateChanged.connect(lambda: self.show_qline_edit(answer_index))
+            elif self.question == "Wybierz ilość okablowania RJ45" \
+                    or self.question == "Wybierz długość wybranego uprzednio okablowania" \
+                    or self.question == "Podaj liczbę urządzeń biurowych, które będą podłączone do sieci":
+                qline = QLineEdit()
+                qline.setMaximumSize(40, 20)
+                self.answers_grid.addWidget(qline, 1, answer_index)
             else:
                 radio = QRadioButton(item)
                 self.radio_buttons.append(radio)
-                self.radio_buttons.append(self.answers_grid.addWidget(radio, 0, answer_index))
+                self.answers_grid.addWidget(radio, 0, answer_index)
+
             answer_index += 1
+
+    def handle_qa(self):
+        for i in reversed(range(self.answers_grid.count())):
+            if isinstance(self.answers_grid.itemAt(i).widget(), QLineEdit):
+                if self.answers_grid.itemAt(i).widget().text() is not "":
+                    list_of_answers.update({self.question: self.answers_grid.itemAt(i).widget().text()})
+            elif isinstance(self.answers_grid.itemAt(i).widget(), QRadioButton):
+                list_of_answers.update({self.question: self.answers_grid.itemAt(i).widget().text()})
+            elif isinstance(self.answers_grid.itemAt(i).widget(), QCheckBox):
+                if self.answers_grid.itemAt(i).widget().isChecked():
+                    list_of_answers.update({self.question: })
+
+    @QtCore.pyqtSlot()
+    def show_qline_edit(self, index):
+        return
 
     def change_index(self, index):
         if self.sender().isChecked():
             self.question_index += index
+
+    def show_project(self):
+        self.output_win = OutputWindow(self)
+        self.showMinimized()
     # def show_prev_question(self):
     #     self.next.setVisible(True)
     #     self.prev.setVisible(True)
@@ -225,6 +271,16 @@ class ProjectWindow(QMainWindow):
     #     self.question_label.setText(self.question)
     #     print("next question printed, %d", self.question_index)
 
+
+class OutputWindow(QMainWindow):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.main_grid = QGridLayout()
+        self.initialize()
+
+    def initialize(self):
+        self.resize(500, 300)
+        self.show()
 
 if __name__ == '__main__':
     import sys
